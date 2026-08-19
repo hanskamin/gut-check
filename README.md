@@ -28,10 +28,12 @@ verdict.
 
 ## Run it
 
+This is a [Bun](https://bun.sh) project.
+
 ```bash
-npm install
+bun install
 cp .env.example .env.local   # add your ANTHROPIC_API_KEY
-npm run dev
+bun dev
 ```
 
 Open http://localhost:3000. If you are logged in with `ant auth login`, the
