@@ -86,10 +86,10 @@ export default function Poster({ onPhoto }: Props) {
             initial="hidden"
             animate="show"
             custom={1}
-            data-text="EVERY BITE IS A MATTER OF RECORD."
+            data-text="SAY NO TO SALMONELLA"
             className="overprint mx-auto mt-4 max-w-3xl font-display text-6xl font-bold uppercase leading-[0.95] tracking-tight sm:text-8xl"
           >
-            Every bite is a matter of record.
+            Say No To Salmonella
           </motion.h1>
           <motion.p
             variants={rise}
