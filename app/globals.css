@@ -1,0 +1,135 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #ede4cf;
+  --color-manila: #e0d2b4;
+  --color-manila-deep: #cdbb95;
+  --color-ink: #1a1712;
+  --color-ink-soft: #4a4438;
+  --color-federal: #1f3a5f;
+  --color-poster: #a61e22;
+  --color-approve: #1f5c38;
+  --color-caution: #8a5a00;
+  --color-phosphor: #45ff8b;
+  --color-crt: #0a0f0a;
+
+  --font-display: var(--font-display), "Arial Narrow", sans-serif;
+  --font-typewriter: var(--font-typewriter), "Courier New", monospace;
+  --font-body: var(--font-body), "Helvetica Neue", sans-serif;
+
+  --shadow-block: 6px 6px 0 0 var(--color-ink);
+  --shadow-block-sm: 3px 3px 0 0 var(--color-ink);
+}
+
+/* ---- Paper grain over the whole page ---------------------------------- */
+body {
+  background-image:
+    radial-gradient(rgba(26, 23, 18, 0.045) 1px, transparent 1px),
+    radial-gradient(rgba(255, 252, 240, 0.5) 1px, transparent 1px);
+  background-size:
+    5px 5px,
+    7px 7px;
+  background-position:
+    0 0,
+    3px 3px;
+}
+
+/* ---- Halftone dot field (poster backdrop) ------------------------------ */
+.halftone {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-ink) 14%, transparent) 1.2px,
+    transparent 1.3px
+  );
+  background-size: 9px 9px;
+}
+
+/* ---- Overprint headline: slightly misregistered two-color print -------- */
+.overprint {
+  position: relative;
+  color: var(--color-federal);
+}
+.overprint::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  color: var(--color-poster);
+  transform: translate(0.045em, 0.045em);
+  z-index: -1;
+  opacity: 0.85;
+}
+
+/* ---- CRT terminal ------------------------------------------------------ */
+.crt {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.28) 0px,
+      rgba(0, 0, 0, 0.28) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(ellipse at center, #101c11 0%, var(--color-crt) 85%);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--color-phosphor) 65%, transparent);
+}
+.crt-cursor {
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ---- Rubber stamp ------------------------------------------------------ */
+.stamp {
+  border: 0.14em double currentColor;
+  border-radius: 0.12em;
+  padding: 0.08em 0.35em;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  mix-blend-mode: multiply;
+  /* uneven ink coverage */
+  mask-image: radial-gradient(
+    ellipse 120% 100% at 48% 52%,
+    black 55%,
+    rgba(0, 0, 0, 0.82) 78%,
+    rgba(0, 0, 0, 0.62) 100%
+  );
+}
+
+/* ---- Classification tape (marquee) ------------------------------------- */
+.tape-track {
+  display: flex;
+  width: max-content;
+  animation: tape 28s linear infinite;
+}
+@keyframes tape {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ---- Perforated edge for the teletype card ----------------------------- */
+.perforated {
+  background-image: radial-gradient(circle, var(--color-paper) 3px, transparent 3.5px);
+  background-size: 18px 100%;
+  background-repeat: repeat-x;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tape-track {
+    animation: none;
+  }
+  .crt-cursor {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
