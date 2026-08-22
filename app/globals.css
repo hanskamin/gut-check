@@ -81,7 +81,7 @@
 .tape-track {
   display: flex;
   width: max-content;
-  animation: tape 28s linear infinite;
+  animation: tape 48s linear infinite;
 }
 @keyframes tape {
   to {
