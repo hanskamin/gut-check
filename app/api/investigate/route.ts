@@ -100,6 +100,12 @@ Rules:
   );
 }
 
+/** Surfaces why a source failed on the wire log instead of a bare "NO RESPONSE". */
+function reasonOf(result: PromiseRejectedResult): string {
+  const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
+  return (message || "unknown error").toUpperCase();
+}
+
 export async function POST(req: Request) {
   let body: { image?: string; mediaType?: string };
   try {
@@ -166,13 +172,13 @@ export async function POST(req: Request) {
         const fsis = fsisResult.status === "fulfilled" ? fsisResult.value : [];
         if (fdaResult.status === "rejected") {
           sourceErrors.push("FDA enforcement database was unreachable.");
-          send({ type: "log", line: "FDA DATABASE: NO RESPONSE. NOTED." });
+          send({ type: "log", line: `FDA DATABASE: NO RESPONSE — ${reasonOf(fdaResult)}` });
         } else {
           send({ type: "log", line: `FDA DATABASE: ${fda.length} CANDIDATE RECORD(S).` });
         }
         if (fsisResult.status === "rejected") {
           sourceErrors.push("USDA FSIS recall feed was unreachable.");
-          send({ type: "log", line: "USDA/FSIS FILE: NO RESPONSE. NOTED." });
+          send({ type: "log", line: `USDA/FSIS FILE: NO RESPONSE — ${reasonOf(fsisResult)}` });
         } else {
           send({ type: "log", line: `USDA/FSIS FILE: ${fsis.length} CANDIDATE RECORD(S).` });
         }

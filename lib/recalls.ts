@@ -80,7 +80,7 @@ const FSIS_HEADERS: Record<string, string> = {
  * fetch is rejected outright, so the request goes through node:https, which
  * passes under both Bun (dev) and Node (production).
  */
-function fetchFsisFeed(): Promise<FsisRaw[]> {
+function requestFsisFeed(): Promise<FsisRaw[]> {
   return new Promise((resolve, reject) => {
     const req = httpsRequest(FSIS_URL, { headers: FSIS_HEADERS }, (res) => {
       if (res.statusCode !== 200) {
@@ -105,6 +105,15 @@ function fetchFsisFeed(): Promise<FsisRaw[]> {
     req.on("error", reject);
     req.end();
   });
+}
+
+/** Akamai rejects the odd request even from a browser-shaped client, so retry once. */
+async function fetchFsisFeed(): Promise<FsisRaw[]> {
+  try {
+    return await requestFsisFeed();
+  } catch {
+    return requestFsisFeed();
+  }
 }
 
 interface FsisRaw {
