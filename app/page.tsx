@@ -52,7 +52,7 @@ export default function Home() {
       });
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? `The Bureau responded ${res.status}.`);
+        throw new Error(data?.error ?? `Gut Check responded ${res.status}.`);
       }
 
       const reader = res.body.getReader();

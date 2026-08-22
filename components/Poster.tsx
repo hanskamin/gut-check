@@ -8,7 +8,7 @@ interface Props {
 }
 
 const TAPE_TEXT =
-  "OFFICIAL USE ★ PUBLIC ADVISORY NO. 86-014 ★ BUREAU OF CONSUMABLE GOODS INTEGRITY ★ ACTIVE RECALL REGISTER ★ ";
+  "UNOFFICIAL BUSINESS ★ PUBLIC ADVISORY ★ GUT CHECK ★ ACTIVE RECALL REGISTER ★ ";
 
 const STEPS = [
   {
@@ -18,7 +18,7 @@ const STEPS = [
   },
   {
     n: "2",
-    title: "The Bureau investigates",
+    title: "Gut Check investigates",
     body: "Your photo is identified, then checked against every active FDA and USDA recall notice.",
   },
   {
@@ -70,24 +70,15 @@ export default function Poster({ onPhoto }: Props) {
       </header>
 
       {/* Poster hero */}
-      <section className="halftone border-b-2 border-ink">
+      <section className="border-b-2 border-ink">
         <div className="mx-auto max-w-4xl px-4 py-14 text-center sm:py-20">
-          <motion.p
-            variants={rise}
-            initial="hidden"
-            animate="show"
-            custom={0}
-            className="font-typewriter text-xs tracking-[0.3em] text-ink-soft"
-          >
-            A PUBLIC SERVICE ANNOUNCEMENT · EST. 1984
-          </motion.p>
           <motion.h1
             variants={rise}
             initial="hidden"
             animate="show"
-            custom={1}
+            custom={0}
             data-text="SAY NO TO SALMONELLA"
-            className="overprint mx-auto mt-4 max-w-3xl font-display text-6xl font-bold uppercase leading-[0.95] tracking-tight sm:text-8xl"
+            className="overprint mx-auto max-w-3xl font-display text-6xl font-bold uppercase leading-[0.95] tracking-tight sm:text-8xl"
           >
             Say No To Salmonella
           </motion.h1>
@@ -95,31 +86,25 @@ export default function Poster({ onPhoto }: Props) {
             variants={rise}
             initial="hidden"
             animate="show"
-            custom={2}
+            custom={1}
             className="mx-auto mt-6 max-w-xl text-base leading-7 text-ink-soft sm:text-lg"
           >
-            Photograph any food or grocery item. The Bureau cross-checks all
+            Photograph any food or grocery item. Gut Check cross-checks all
             active FDA and USDA recall notices and stamps your verdict in
             seconds.
           </motion.p>
-          <motion.div variants={rise} initial="hidden" animate="show" custom={3}>
+          <motion.div variants={rise} initial="hidden" animate="show" custom={2}>
             <button
               onClick={() => inputRef.current?.click()}
               className="mt-10 border-2 border-ink bg-poster px-5 py-3.5 font-display text-lg font-bold uppercase tracking-widest text-paper shadow-block transition-transform hover:-translate-y-1 hover:shadow-[8px_8px_0_0_var(--color-ink)] focus-visible:outline-4 focus-visible:outline-federal sm:px-8 sm:py-4 sm:text-xl"
             >
-              Submit item for inspection
+              Submit photo for inspection
             </button>
-            <p className="mt-4 font-typewriter text-[11px] tracking-widest text-ink-soft">
-              TAKE A PHOTO, UPLOAD A FILE, OR DROP ONE HERE.
-              <br />
-              PHOTOGRAPHS ARE PROCESSED, NOT RETAINED.
-            </p>
           </motion.div>
           <input
             ref={inputRef}
             type="file"
             accept="image/*"
-            capture="environment"
             className="sr-only"
             aria-label="Photograph or upload a food item"
             onChange={(e) => {
@@ -157,11 +142,9 @@ export default function Poster({ onPhoto }: Props) {
 
       <footer className="border-t-2 border-ink bg-manila px-4 py-6 sm:px-8">
         <p className="mx-auto max-w-4xl font-typewriter text-[11px] leading-5 text-ink-soft">
-          NOTICE: GUT CHECK IS NOT A GOVERNMENT AGENCY. VERDICTS ARE AI-ASSISTED
-          READINGS OF PUBLIC FDA (OPENFDA) AND USDA (FSIS) RECALL DATA AND CAN BE
-          WRONG OR INCOMPLETE. RECALLS ARE OFTEN LIMITED TO SPECIFIC LOTS AND
-          DATES. ALWAYS VERIFY AT FDA.GOV/SAFETY/RECALLS AND
-          FSIS.USDA.GOV/RECALLS.
+          NOTICE: GUT CHECK IS NOT A GOVERNMENT AGENCY. VERDICTS ARE READINGS OF
+          PUBLIC FDA (OPENFDA) AND USDA (FSIS) RECALL DATA AND CAN BE WRONG OR
+          INCOMPLETE. RECALLS ARE OFTEN LIMITED TO SPECIFIC LOTS AND DATES.
         </p>
       </footer>
     </div>

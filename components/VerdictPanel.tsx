@@ -130,10 +130,10 @@ export default function VerdictPanel({ verdict, subject, photoDataUrl, caseNo }:
             FOR IMMEDIATE RELEASE · {caseNo}
           </p>
           <p className="mt-1 font-display text-4xl font-bold uppercase tracking-tight">
-            Gut Check Bureau
+            Gut Check
           </p>
           <p className="font-typewriter text-xs tracking-widest text-ink-soft">
-            BUREAU OF CONSUMABLE GOODS INTEGRITY — RECALL DETERMINATION
+            CONSUMABLE GOODS INTEGRITY — RECALL DETERMINATION
           </p>
           <div className="mt-6 flex gap-6">
             {photoDataUrl && (
