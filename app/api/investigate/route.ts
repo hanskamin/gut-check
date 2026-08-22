@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
+import { sanitizeFsisFeed } from "@/lib/fsis-client";
 import { searchFda, searchFsis } from "@/lib/recalls";
 import {
   SubjectSchema,
@@ -84,7 +85,8 @@ Rules:
 - CLEAR when no record plausibly covers the item. Zero candidate records for a well-identified item means CLEAR.
 - INCONCLUSIVE when identification confidence is LOW, or when a data source failed and the other found nothing.
 - Recalls are lot- and date-specific. Never claim certainty a photo cannot provide; say what the shopper should check (lot code, best-by date) in guidance.
-- Write reasoning and guidance in plain language for a shopper, not a regulator.`,
+- Write reasoning and guidance in plain language for a shopper, not a regulator.
+- Never mention data_source_errors, feeds, APIs, or database problems in reasoning or guidance. Those are internal plumbing. Use them only to pick INCONCLUSIVE when a failed source could have changed the answer.`,
     [
       {
         type: "text",
@@ -99,14 +101,24 @@ Rules:
   );
 }
 
+/** Surfaces why a source failed on the wire log instead of a bare "NO RESPONSE". */
+function reasonOf(result: PromiseRejectedResult): string {
+  const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
+  return (message || "unknown error").toUpperCase();
+}
+
 export async function POST(req: Request) {
-  let body: { image?: string; mediaType?: string };
+  let body: { image?: string; mediaType?: string; fsisFeed?: unknown };
   try {
     body = await req.json();
   } catch {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
   const { image, mediaType } = body;
+  // The browser relays the FSIS feed because Akamai blocks this host's
+  // egress; the copy is untrusted input, so it is re-sanitized here. It only
+  // shapes the sender's own verdict. Absent or malformed → server-side fetch.
+  const fsisFeed = body.fsisFeed === undefined ? null : sanitizeFsisFeed(body.fsisFeed);
   if (!image || !mediaType || !ALLOWED_MEDIA.has(mediaType as MediaType)) {
     return Response.json({ error: "A photo is required." }, { status: 400 });
   }
@@ -159,19 +171,19 @@ export async function POST(req: Request) {
         const sourceErrors: string[] = [];
         const [fdaResult, fsisResult] = await Promise.allSettled([
           searchFda(subject),
-          searchFsis(subject),
+          searchFsis(subject, fsisFeed),
         ]);
         const fda = fdaResult.status === "fulfilled" ? fdaResult.value : [];
         const fsis = fsisResult.status === "fulfilled" ? fsisResult.value : [];
         if (fdaResult.status === "rejected") {
           sourceErrors.push("FDA enforcement database was unreachable.");
-          send({ type: "log", line: "FDA DATABASE: NO RESPONSE. NOTED." });
+          send({ type: "log", line: `FDA DATABASE: NO RESPONSE — ${reasonOf(fdaResult)}` });
         } else {
           send({ type: "log", line: `FDA DATABASE: ${fda.length} CANDIDATE RECORD(S).` });
         }
         if (fsisResult.status === "rejected") {
           sourceErrors.push("USDA FSIS recall feed was unreachable.");
-          send({ type: "log", line: "USDA/FSIS FILE: NO RESPONSE. NOTED." });
+          send({ type: "log", line: `USDA/FSIS FILE: NO RESPONSE — ${reasonOf(fsisResult)}` });
         } else {
           send({ type: "log", line: `USDA/FSIS FILE: ${fsis.length} CANDIDATE RECORD(S).` });
         }

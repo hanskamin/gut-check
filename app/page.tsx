@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import Poster from "@/components/Poster";
 import CaseFile from "@/components/CaseFile";
 import { preparePhoto } from "@/lib/client-image";
+import { fetchFsisFeedInBrowser } from "@/lib/fsis-client";
 import type { Subject, Verdict, WireEvent } from "@/lib/types";
 
 type Stage = "poster" | "case";
@@ -41,13 +42,23 @@ export default function Home() {
     setError(null);
 
     try {
-      const photo = await preparePhoto(file);
+      // The USDA feed travels with the request because its CDN blocks the
+      // server's egress IPs; the shopper's browser is the one client that
+      // always gets through. See lib/fsis-client.ts.
+      const [photo, fsisFeed] = await Promise.all([
+        preparePhoto(file),
+        fetchFsisFeedInBrowser(),
+      ]);
       setPhotoDataUrl(photo.dataUrl);
 
       const res = await fetch("/api/investigate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image: photo.base64, mediaType: photo.mediaType }),
+        body: JSON.stringify({
+          image: photo.base64,
+          mediaType: photo.mediaType,
+          fsisFeed: fsisFeed ?? undefined,
+        }),
         signal: abort.signal,
       });
       if (!res.ok || !res.body) {

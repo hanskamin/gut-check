@@ -61,6 +61,23 @@ export const VerdictSchema = z.object({
 });
 export type Verdict = z.infer<typeof VerdictSchema>;
 
+/**
+ * A raw record from the FSIS recall API. Some fields arrive as arrays of
+ * strings and others as plain strings, varying record to record.
+ */
+export interface FsisRaw {
+  field_title?: string;
+  field_active_notice?: string;
+  field_establishment?: string;
+  field_product_items?: string | string[];
+  field_recall_reason?: string | string[];
+  field_recall_date?: string;
+  field_risk_level?: string;
+  field_states?: string;
+  field_recall_url?: string;
+  field_summary?: string | string[];
+}
+
 /** Trimmed recall records handed to the adjudicator. */
 export interface FdaRecord {
   recall_number: string;

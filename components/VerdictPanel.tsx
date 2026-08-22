@@ -45,13 +45,25 @@ export default function VerdictPanel({ verdict, subject, photoDataUrl, caseNo }:
   }
 
   async function downloadRelease() {
-    if (!releaseRef.current || issuing) return;
+    const node = releaseRef.current;
+    if (!node || issuing) return;
     setIssuing(true);
     setIssueError(null);
     try {
+      await Promise.all(
+        Array.from(node.querySelectorAll("img")).map((img) =>
+          img.decode().catch(() => undefined),
+        ),
+      );
+
+      // html-to-image drops embedded images on its first pass in WebKit, which
+      // is why the evidence photo came out blank. The first capture primes the
+      // cache and is thrown away; the second one carries the photo.
+      await toBlob(node, { pixelRatio: 2 });
+
       // A Blob URL, not a data URL: iOS Safari silently drops multi-megabyte
       // data: downloads after showing its view/download sheet.
-      const blob = await toBlob(releaseRef.current, { pixelRatio: 2 });
+      const blob = await toBlob(node, { pixelRatio: 2 });
       if (!blob) throw new Error("empty render");
 
       const slug = caseNo.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -197,8 +209,8 @@ export default function VerdictPanel({ verdict, subject, photoDataUrl, caseNo }:
           </div>
           <p className="mt-6 text-sm leading-6">{verdict.reasoning}</p>
           <p className="mt-4 border-t-2 border-ink pt-3 font-typewriter text-[10px] leading-4 text-ink-soft">
-            AI-assisted reading of public FDA (openFDA) and USDA (FSIS) recall data.
-            Not a government determination. Verify at fda.gov · fsis.usda.gov
+            Reading of public FDA (openFDA) and USDA (FSIS) recall data. Not a
+            government determination. Verify at fda.gov · fsis.usda.gov
           </p>
         </div>
       </div>

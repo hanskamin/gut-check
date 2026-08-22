@@ -1,19 +1,23 @@
-import type { FdaRecord, FsisRecord, Subject } from "./types";
+import { request as httpsRequest } from "node:https";
+import { createGunzip } from "node:zlib";
+import type { FdaRecord, FsisRaw, FsisRecord, Subject } from "./types";
 
 const FETCH_TIMEOUT_MS = 20_000;
 const MAX_RECORDS = 12;
 
+/** FSIS returns some fields as arrays of strings and others as plain strings. */
+function toText(value: unknown): string {
+  if (Array.isArray(value)) return value.filter((v) => typeof v === "string").join(", ");
+  return typeof value === "string" ? value : "";
+}
+
 function trim(value: unknown, max = 320): string {
-  const s = Array.isArray(value)
-    ? value.filter((v) => typeof v === "string").join(", ")
-    : typeof value === "string"
-      ? value
-      : "";
+  const s = toText(value);
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
-function stripHtml(s: string): string {
-  return s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+function stripHtml(value: unknown): string {
+  return toText(value).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
 /**
@@ -53,30 +57,79 @@ export async function searchFda(subject: Subject): Promise<FdaRecord[]> {
   }));
 }
 
-interface FsisRaw {
-  field_title?: string;
-  field_active_notice?: string;
-  field_establishment?: string;
-  field_product_items?: string;
-  field_recall_reason?: string | string[];
-  field_recall_date?: string;
-  field_risk_level?: string;
-  field_states?: string;
-  field_recall_url?: string;
-  field_summary?: string;
+const FSIS_URL = "https://www.fsis.usda.gov/fsis/api/recall/v/1";
+
+const FSIS_HEADERS: Record<string, string> = {
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+  "sec-ch-ua": '"Chromium";v="131", "Not_A Brand";v="24"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"macOS"',
+  "sec-fetch-dest": "empty",
+  "sec-fetch-mode": "cors",
+  "sec-fetch-site": "same-origin",
+  "Accept-Encoding": "gzip",
+  Referer: "https://www.fsis.usda.gov/recalls",
+};
+
+/**
+ * FSIS sits behind Akamai, which answers 403 to clients that do not look like
+ * a browser — both the headers and the TLS client are checked, and datacenter
+ * egress IPs can be rejected no matter what the client sends. Bun's global
+ * fetch is rejected outright, so the request goes through node:https, which
+ * passes under both Bun (dev) and Node (production) when the IP is allowed.
+ * The primary path is the feed relayed from the shopper's browser (see
+ * lib/fsis-client.ts); this server-side fetch is the fallback.
+ */
+function requestFsisFeed(): Promise<FsisRaw[]> {
+  return new Promise((resolve, reject) => {
+    const req = httpsRequest(FSIS_URL, { headers: FSIS_HEADERS }, (res) => {
+      if (res.statusCode !== 200) {
+        res.resume();
+        reject(new Error(`FSIS API responded ${res.statusCode}`));
+        return;
+      }
+      const body =
+        res.headers["content-encoding"] === "gzip" ? res.pipe(createGunzip()) : res;
+      const chunks: Buffer[] = [];
+      body.on("data", (c: Buffer) => chunks.push(c));
+      body.on("error", reject);
+      body.on("end", () => {
+        try {
+          resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")) as FsisRaw[]);
+        } catch {
+          reject(new Error("FSIS API returned unreadable JSON"));
+        }
+      });
+    });
+    req.setTimeout(FETCH_TIMEOUT_MS, () => req.destroy(new Error("FSIS API timed out")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+/** Akamai rejects the odd request even from a browser-shaped client, so retry once. */
+async function fetchFsisFeed(): Promise<FsisRaw[]> {
+  try {
+    return await requestFsisFeed();
+  } catch {
+    return requestFsisFeed();
+  }
 }
 
 /**
  * USDA FSIS recall API. It has no server-side text search, so we pull the
  * feed, keep active notices, and match the subject's terms locally.
+ * `feed` is the copy relayed from the shopper's browser; when absent, the
+ * feed is fetched server-side.
  */
-export async function searchFsis(subject: Subject): Promise<FsisRecord[]> {
-  const res = await fetch("https://www.fsis.usda.gov/fsis/api/recall/v/1", {
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    headers: { Accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`FSIS API responded ${res.status}`);
-  const all = (await res.json()) as FsisRaw[];
+export async function searchFsis(
+  subject: Subject,
+  feed?: FsisRaw[] | null,
+): Promise<FsisRecord[]> {
+  const all = feed ?? (await fetchFsisFeed());
 
   const terms = [...new Set(
     [...subject.search_terms, subject.brand ?? "", subject.category]
@@ -89,8 +142,8 @@ export async function searchFsis(subject: Subject): Promise<FsisRecord[]> {
     const haystack = [
       r.field_title,
       r.field_establishment,
-      r.field_product_items,
-      stripHtml(r.field_summary ?? ""),
+      stripHtml(r.field_product_items),
+      stripHtml(r.field_summary),
     ]
       .join(" ")
       .toLowerCase();
@@ -100,7 +153,7 @@ export async function searchFsis(subject: Subject): Promise<FsisRecord[]> {
   return matched.slice(0, MAX_RECORDS).map((r) => ({
     title: trim(r.field_title, 160),
     establishment: trim(r.field_establishment, 120),
-    products: trim(stripHtml(r.field_product_items ?? "")),
+    products: trim(stripHtml(r.field_product_items)),
     reason: trim(r.field_recall_reason, 160),
     date: trim(r.field_recall_date, 20),
     risk_level: trim(r.field_risk_level, 60),
