@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** What Claude vision extracts from the submitted photograph. */
+/** What the vision model extracts from the submitted photograph. */
 export const SubjectSchema = z.object({
   is_consumable: z
     .boolean()

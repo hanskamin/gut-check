@@ -1,5 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import OpenAI, { AuthenticationError } from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 import type { z } from "zod";
 import { searchFda, searchFsis } from "@/lib/recalls";
 import {
@@ -13,8 +13,8 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const MODEL = "claude-opus-5";
-const client = new Anthropic();
+const MODEL = "gpt-5.6-terra";
+const client = new OpenAI();
 
 const ALLOWED_MEDIA = new Set([
   "image/jpeg",
@@ -25,43 +25,48 @@ const ALLOWED_MEDIA = new Set([
 type MediaType = "image/jpeg" | "image/png" | "image/webp" | "image/gif";
 
 /**
- * One structured call: Opus 5 with server-side refusal fallback to Opus 4.8.
- * The response text is validated against the given Zod schema.
+ * One structured call: GPT-5.6 Terra at medium reasoning effort.
+ * The response is validated against the given Zod schema.
  */
-async function callClaude<S extends z.ZodTypeAny>(
+async function callModel<S extends z.ZodTypeAny>(
   schema: S,
-  system: string,
-  content: Anthropic.Beta.BetaContentBlockParam[],
+  instructions: string,
+  content: OpenAI.Responses.ResponseInputContent[],
 ): Promise<z.infer<S>> {
-  const response = await client.beta.messages.create({
+  const response = await client.responses.parse({
     model: MODEL,
-    max_tokens: 16000,
-    betas: ["server-side-fallback-2026-06-01"],
-    fallbacks: [{ model: "claude-opus-4-8" }],
-    system,
-    output_config: { format: zodOutputFormat(schema) },
-    messages: [{ role: "user", content }],
+    max_output_tokens: 16000,
+    reasoning: { effort: "medium" },
+    instructions,
+    text: { format: zodTextFormat(schema, "analysis") },
+    input: [{ role: "user", content }],
   });
 
-  if (response.stop_reason === "refusal") {
+  const refused = response.output.some(
+    (item) =>
+      item.type === "message" && item.content.some((part) => part.type === "refusal"),
+  );
+  if (refused) {
     throw new Error("The analysis was declined by the model's safety system.");
   }
-  const text = response.content.find((b) => b.type === "text")?.text;
-  if (!text) throw new Error("The model returned no analysis.");
-  return schema.parse(JSON.parse(text));
+  if (response.output_parsed == null) {
+    throw new Error("The model returned no analysis.");
+  }
+  return schema.parse(response.output_parsed);
 }
 
 async function identifySubject(image: string, mediaType: MediaType): Promise<Subject> {
-  return callClaude(
+  return callModel(
     SubjectSchema,
     "You identify food and grocery items from photographs for a product-recall lookup service. Be precise about brand and product names. Read all visible label text. If the item is not a food, beverage, or grocery product, set is_consumable to false.",
     [
       {
-        type: "image",
-        source: { type: "base64", media_type: mediaType, data: image },
+        type: "input_image",
+        detail: "auto",
+        image_url: `data:${mediaType};base64,${image}`,
       },
       {
-        type: "text",
+        type: "input_text",
         text: "Identify this item for a recall database search.",
       },
     ],
@@ -74,7 +79,7 @@ async function adjudicate(
   fsis: unknown[],
   sourceErrors: string[],
 ): Promise<Verdict> {
-  return callClaude(
+  return callModel(
     VerdictSchema,
     `You are a food-recall adjudicator. You receive an identified grocery item plus candidate records pulled from the FDA enforcement database (status "Ongoing" only) and the USDA FSIS recall feed (active notices only). Decide whether an ACTIVE recall plausibly covers this specific item.
 
@@ -87,7 +92,7 @@ Rules:
 - Write reasoning and guidance in plain language for a shopper, not a regulator.`,
     [
       {
-        type: "text",
+        type: "input_text",
         text: JSON.stringify({
           identified_item: subject,
           fda_candidate_records: fda,
@@ -185,9 +190,8 @@ export async function POST(req: Request) {
       } catch (err) {
         const raw = err instanceof Error ? err.message : "";
         const message =
-          err instanceof Anthropic.AuthenticationError ||
-          raw.includes("authentication method")
-            ? "Gut Check has no credentials. Set ANTHROPIC_API_KEY in .env.local and restart the server."
+          err instanceof AuthenticationError || raw.includes("API key")
+            ? "Gut Check has no credentials. Set OPENAI_API_KEY in .env.local and restart the server."
             : raw || "The investigation failed for an unknown reason.";
         send({ type: "error", message });
       } finally {

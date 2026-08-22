@@ -1,7 +1,7 @@
 # Gut Check
 
 Photograph a food or grocery item. The Bureau of Consumable Goods Integrity
-(this app) identifies it with Claude vision, checks the item against all
+(this app) identifies it with GPT-5.6 Terra vision, checks the item against all
 **active** FDA and USDA recall notices, and stamps a verdict.
 
 The UI is themed as 1980s government material: a propaganda-poster landing
@@ -12,15 +12,15 @@ verdict.
 
 1. The browser downscales your photo and sends it to `POST /api/investigate`.
 2. The route streams the investigation as Server-Sent Events:
-   - **Identify** — Claude Opus 5 (`claude-opus-5`, with a server-side
-     fallback to Opus 4.8) reads the label and returns structured data:
+   - **Identify** — GPT-5.6 Terra (`gpt-5.6-terra`, medium reasoning
+     effort) reads the label and returns structured data:
      brand, product, category, search terms.
    - **Search** — the server queries the
      [openFDA food enforcement API](https://open.fda.gov/apis/food/enforcement/)
      (status `Ongoing`) and the
      [USDA FSIS recall API](https://www.fsis.usda.gov/science-data/developer-resources/recall-api)
      (active notices) in parallel.
-   - **Adjudicate** — Claude reads the candidate records and returns a
+   - **Adjudicate** — the model reads the candidate records and returns a
      structured verdict: `CLEAR`, `RECALLED`, `POSSIBLE_MATCH`, or
      `INCONCLUSIVE`, with reasoning, guidance, and matched notices.
 3. The case file shows the live feed, then the stamp. You can download the
@@ -32,12 +32,11 @@ This is a [Bun](https://bun.sh) project.
 
 ```bash
 bun install
-cp .env.example .env.local   # add your ANTHROPIC_API_KEY
+cp .env.example .env.local   # add your OPENAI_API_KEY
 bun dev
 ```
 
-Open http://localhost:3000. If you are logged in with `ant auth login`, the
-API key variable is not necessary.
+Open http://localhost:3000.
 
 ## Honest limits
 
