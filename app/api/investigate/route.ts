@@ -84,7 +84,8 @@ Rules:
 - CLEAR when no record plausibly covers the item. Zero candidate records for a well-identified item means CLEAR.
 - INCONCLUSIVE when identification confidence is LOW, or when a data source failed and the other found nothing.
 - Recalls are lot- and date-specific. Never claim certainty a photo cannot provide; say what the shopper should check (lot code, best-by date) in guidance.
-- Write reasoning and guidance in plain language for a shopper, not a regulator.`,
+- Write reasoning and guidance in plain language for a shopper, not a regulator.
+- Never mention data_source_errors, feeds, APIs, or database problems in reasoning or guidance. Those are internal plumbing. Use them only to pick INCONCLUSIVE when a failed source could have changed the answer.`,
     [
       {
         type: "text",
