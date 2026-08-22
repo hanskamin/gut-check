@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { toPng } from "html-to-image";
+import { toBlob } from "html-to-image";
 import type { Subject, Verdict } from "@/lib/types";
 
 const STATUS: Record<
@@ -26,19 +26,52 @@ export default function VerdictPanel({ verdict, subject, photoDataUrl, caseNo }:
   const { stamp, color } = STATUS[verdict.status];
   const releaseRef = useRef<HTMLDivElement>(null);
   const [issuing, setIssuing] = useState(false);
+  const [issueError, setIssueError] = useState<string | null>(null);
   const subjectLine = subject
     ? [subject.brand, subject.product_name].filter(Boolean).join(" — ")
     : "UNIDENTIFIED ITEM";
 
+  function saveViaLink(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    // The anchor must be in the document for the click to count as a download.
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }
+
   async function downloadRelease() {
     if (!releaseRef.current || issuing) return;
     setIssuing(true);
+    setIssueError(null);
     try {
-      const png = await toPng(releaseRef.current, { pixelRatio: 2 });
-      const a = document.createElement("a");
-      a.href = png;
-      a.download = `gut-check-${caseNo.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.png`;
-      a.click();
+      // A Blob URL, not a data URL: iOS Safari silently drops multi-megabyte
+      // data: downloads after showing its view/download sheet.
+      const blob = await toBlob(releaseRef.current, { pixelRatio: 2 });
+      if (!blob) throw new Error("empty render");
+
+      const slug = caseNo.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const filename = `gut-check-${slug || "case"}.png`;
+      const file = new File([blob], filename, { type: "image/png" });
+
+      // On iOS the share sheet is the only route that actually saves the file.
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          return;
+        } catch (err) {
+          if ((err as Error)?.name === "AbortError") return;
+          // Share was blocked (lost user gesture, unsupported target) — fall through.
+        }
+      }
+
+      saveViaLink(blob, filename);
+    } catch {
+      setIssueError("The press jammed — the release could not be printed.");
     } finally {
       setIssuing(false);
     }
@@ -117,6 +150,11 @@ export default function VerdictPanel({ verdict, subject, photoDataUrl, caseNo }:
           <p className="font-typewriter text-[11px] text-ink-soft">
             Verify at fda.gov and fsis.usda.gov before you act.
           </p>
+          {issueError && (
+            <p role="alert" className="w-full font-typewriter text-[11px] text-poster">
+              {issueError}
+            </p>
+          )}
         </div>
       </motion.div>
 
