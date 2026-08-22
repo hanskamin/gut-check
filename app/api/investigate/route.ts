@@ -187,7 +187,7 @@ export async function POST(req: Request) {
         const message =
           err instanceof Anthropic.AuthenticationError ||
           raw.includes("authentication method")
-            ? "The Bureau has no credentials. Set ANTHROPIC_API_KEY in .env.local and restart the server."
+            ? "Gut Check has no credentials. Set ANTHROPIC_API_KEY in .env.local and restart the server."
             : raw || "The investigation failed for an unknown reason.";
         send({ type: "error", message });
       } finally {

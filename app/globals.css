@@ -21,29 +21,6 @@
   --shadow-block-sm: 3px 3px 0 0 var(--color-ink);
 }
 
-/* ---- Paper grain over the whole page ---------------------------------- */
-body {
-  background-image:
-    radial-gradient(rgba(26, 23, 18, 0.045) 1px, transparent 1px),
-    radial-gradient(rgba(255, 252, 240, 0.5) 1px, transparent 1px);
-  background-size:
-    5px 5px,
-    7px 7px;
-  background-position:
-    0 0,
-    3px 3px;
-}
-
-/* ---- Halftone dot field (poster backdrop) ------------------------------ */
-.halftone {
-  background-image: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--color-ink) 14%, transparent) 1.2px,
-    transparent 1.3px
-  );
-  background-size: 9px 9px;
-}
-
 /* ---- Overprint headline: slightly misregistered two-color print -------- */
 .overprint {
   position: relative;

@@ -21,9 +21,9 @@ const body = Public_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "GUT CHECK — Bureau of Consumable Goods Integrity",
+  title: "GUT CHECK — Consumable Goods Integrity",
   description:
-    "Photograph a food or grocery item. The Bureau checks active FDA and USDA recalls and issues a verdict.",
+    "Photograph a food or grocery item. Gut Check scans active FDA and USDA recalls and issues a verdict.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
