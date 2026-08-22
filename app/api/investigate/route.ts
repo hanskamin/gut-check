@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
+import { sanitizeFsisFeed } from "@/lib/fsis-client";
 import { searchFda, searchFsis } from "@/lib/recalls";
 import {
   SubjectSchema,
@@ -107,13 +108,17 @@ function reasonOf(result: PromiseRejectedResult): string {
 }
 
 export async function POST(req: Request) {
-  let body: { image?: string; mediaType?: string };
+  let body: { image?: string; mediaType?: string; fsisFeed?: unknown };
   try {
     body = await req.json();
   } catch {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
   const { image, mediaType } = body;
+  // The browser relays the FSIS feed because Akamai blocks this host's
+  // egress; the copy is untrusted input, so it is re-sanitized here. It only
+  // shapes the sender's own verdict. Absent or malformed → server-side fetch.
+  const fsisFeed = body.fsisFeed === undefined ? null : sanitizeFsisFeed(body.fsisFeed);
   if (!image || !mediaType || !ALLOWED_MEDIA.has(mediaType as MediaType)) {
     return Response.json({ error: "A photo is required." }, { status: 400 });
   }
@@ -166,7 +171,7 @@ export async function POST(req: Request) {
         const sourceErrors: string[] = [];
         const [fdaResult, fsisResult] = await Promise.allSettled([
           searchFda(subject),
-          searchFsis(subject),
+          searchFsis(subject, fsisFeed),
         ]);
         const fda = fdaResult.status === "fulfilled" ? fdaResult.value : [];
         const fsis = fsisResult.status === "fulfilled" ? fsisResult.value : [];

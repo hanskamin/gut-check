@@ -1,6 +1,6 @@
 import { request as httpsRequest } from "node:https";
 import { createGunzip } from "node:zlib";
-import type { FdaRecord, FsisRecord, Subject } from "./types";
+import type { FdaRecord, FsisRaw, FsisRecord, Subject } from "./types";
 
 const FETCH_TIMEOUT_MS = 20_000;
 const MAX_RECORDS = 12;
@@ -76,9 +76,12 @@ const FSIS_HEADERS: Record<string, string> = {
 
 /**
  * FSIS sits behind Akamai, which answers 403 to clients that do not look like
- * a browser — both the headers and the TLS client are checked. Bun's global
+ * a browser — both the headers and the TLS client are checked, and datacenter
+ * egress IPs can be rejected no matter what the client sends. Bun's global
  * fetch is rejected outright, so the request goes through node:https, which
- * passes under both Bun (dev) and Node (production).
+ * passes under both Bun (dev) and Node (production) when the IP is allowed.
+ * The primary path is the feed relayed from the shopper's browser (see
+ * lib/fsis-client.ts); this server-side fetch is the fallback.
  */
 function requestFsisFeed(): Promise<FsisRaw[]> {
   return new Promise((resolve, reject) => {
@@ -116,25 +119,17 @@ async function fetchFsisFeed(): Promise<FsisRaw[]> {
   }
 }
 
-interface FsisRaw {
-  field_title?: string;
-  field_active_notice?: string;
-  field_establishment?: string;
-  field_product_items?: string | string[];
-  field_recall_reason?: string | string[];
-  field_recall_date?: string;
-  field_risk_level?: string;
-  field_states?: string;
-  field_recall_url?: string;
-  field_summary?: string;
-}
-
 /**
  * USDA FSIS recall API. It has no server-side text search, so we pull the
  * feed, keep active notices, and match the subject's terms locally.
+ * `feed` is the copy relayed from the shopper's browser; when absent, the
+ * feed is fetched server-side.
  */
-export async function searchFsis(subject: Subject): Promise<FsisRecord[]> {
-  const all = await fetchFsisFeed();
+export async function searchFsis(
+  subject: Subject,
+  feed?: FsisRaw[] | null,
+): Promise<FsisRecord[]> {
+  const all = feed ?? (await fetchFsisFeed());
 
   const terms = [...new Set(
     [...subject.search_terms, subject.brand ?? "", subject.category]
