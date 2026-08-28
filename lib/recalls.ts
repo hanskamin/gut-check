@@ -1,6 +1,6 @@
 import { request as httpsRequest } from "node:https";
 import { createGunzip } from "node:zlib";
-import type { FdaRecord, FsisRaw, FsisRecord, Subject } from "./types";
+import type { FdaPressRecord, FdaRecord, FsisRaw, FsisRecord, Subject } from "./types";
 
 const FETCH_TIMEOUT_MS = 20_000;
 const MAX_RECORDS = 12;
@@ -55,6 +55,103 @@ export async function searchFda(subject: Subject): Promise<FdaRecord[]> {
     distribution_pattern: trim(r.distribution_pattern, 160),
     code_info: trim(r.code_info, 200),
   }));
+}
+
+function decodeEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+const FDA_PRESS_URL = "https://www.fda.gov/datatables/views/ajax";
+const FDA_PRESS_ROWS_PER_TERM = 10;
+const FDA_PRESS_MAX_TERMS = 5;
+
+/**
+ * One row of the recall datatable on
+ * fda.gov/safety/recalls-market-withdrawals-safety-alerts: an array of eight
+ * HTML strings — date, brand link, product description, product-type terms,
+ * reason, company, status ("Terminated" or empty), and a search excerpt.
+ */
+type FdaPressRow = string[];
+
+async function fetchFdaPressRows(term: string): Promise<FdaPressRow[]> {
+  const params = new URLSearchParams({
+    search_api_fulltext: term,
+    length: String(FDA_PRESS_ROWS_PER_TERM),
+    start: "0",
+    draw: "1",
+    view_name: "recall_solr_index",
+    view_display_id: "recall_datatable_block_1",
+    _wrapper_format: "drupal_ajax",
+  });
+  const res = await fetch(`${FDA_PRESS_URL}?${params}`, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: {
+      Accept: "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+      Referer: "https://www.fda.gov/safety/recalls-market-withdrawals-safety-alerts",
+    },
+  });
+  if (!res.ok) throw new Error(`FDA press feed responded ${res.status}`);
+  const data = (await res.json()) as { data?: FdaPressRow[] };
+  return data.data ?? [];
+}
+
+function parseFdaPressRow(row: FdaPressRow): FdaPressRecord {
+  const [date, brandLink, description, productType, reason, company] = row;
+  const path = /href="([^"]+)"/.exec(brandLink ?? "")?.[1] ?? "";
+  return {
+    posted_date: trim(decodeEntities(stripHtml(date)), 20),
+    brand: trim(decodeEntities(stripHtml(brandLink)), 120),
+    company: trim(decodeEntities(stripHtml(company)), 120),
+    product_description: trim(decodeEntities(stripHtml(description))),
+    reason: trim(decodeEntities(stripHtml(reason)), 200),
+    product_type: trim(decodeEntities(stripHtml(productType)), 80),
+    url: path ? `https://www.fda.gov${decodeEntities(path)}` : "",
+  };
+}
+
+/**
+ * The FDA recall press-release feed (the datatable on fda.gov). Announcements
+ * appear here the day a recall is published — weeks before the openFDA
+ * enforcement database, which only carries recalls after classification.
+ * The endpoint's full-text search ANDs the words in one query, so each
+ * phrase is searched separately and the results are merged.
+ */
+export async function searchFdaPress(subject: Subject): Promise<FdaPressRecord[]> {
+  const phrases = [...subject.search_terms, subject.brand ?? "", subject.category];
+  const unique = [...new Set(phrases.map((p) => p.trim().toLowerCase()).filter(Boolean))].slice(
+    0,
+    FDA_PRESS_MAX_TERMS,
+  );
+  if (unique.length === 0) return [];
+
+  const settled = await Promise.allSettled(unique.map(fetchFdaPressRows));
+  const fulfilled = settled.filter(
+    (s): s is PromiseFulfilledResult<FdaPressRow[]> => s.status === "fulfilled",
+  );
+  if (fulfilled.length === 0) {
+    throw (settled[0] as PromiseRejectedResult).reason;
+  }
+
+  const seen = new Set<string>();
+  const records: FdaPressRecord[] = [];
+  for (const row of fulfilled.flatMap((s) => s.value)) {
+    const terminated = (row[6] ?? "").includes("Terminated");
+    const record = parseFdaPressRow(row);
+    const key = record.url || `${record.posted_date} ${record.brand}`;
+    if (terminated || seen.has(key)) continue;
+    seen.add(key);
+    records.push(record);
+  }
+  return records
+    .sort((a, b) => Date.parse(b.posted_date) - Date.parse(a.posted_date))
+    .slice(0, MAX_RECORDS);
 }
 
 const FSIS_URL = "https://www.fsis.usda.gov/fsis/api/recall/v/1";
