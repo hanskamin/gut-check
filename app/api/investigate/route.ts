@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
 import { sanitizeFsisFeed } from "@/lib/fsis-client";
-import { searchFda, searchFsis } from "@/lib/recalls";
+import { searchFda, searchFdaPress, searchFsis } from "@/lib/recalls";
 import {
   SubjectSchema,
   VerdictSchema,
@@ -72,12 +72,13 @@ async function identifySubject(image: string, mediaType: MediaType): Promise<Sub
 async function adjudicate(
   subject: Subject,
   fda: unknown[],
+  fdaPress: unknown[],
   fsis: unknown[],
   sourceErrors: string[],
 ): Promise<Verdict> {
   return callClaude(
     VerdictSchema,
-    `You are a food-recall adjudicator. You receive an identified grocery item plus candidate records pulled from the FDA enforcement database (status "Ongoing" only) and the USDA FSIS recall feed (active notices only). Decide whether an ACTIVE recall plausibly covers this specific item.
+    `You are a food-recall adjudicator. You receive an identified grocery item plus candidate records pulled from three sources: the FDA enforcement database (status "Ongoing" only; it lags announcements by weeks because recalls enter it only after classification), the FDA recall press-release feed (announcements published the day a recall goes public — this is the freshest FDA source; treat these as active recalls), and the USDA FSIS recall feed (active notices only). Decide whether an ACTIVE recall plausibly covers this specific item.
 
 Rules:
 - RECALLED requires the brand or firm AND the product type to match a record.
@@ -93,6 +94,7 @@ Rules:
         text: JSON.stringify({
           identified_item: subject,
           fda_candidate_records: fda,
+          fda_press_announcements: fdaPress,
           usda_fsis_candidate_records: fsis,
           data_source_errors: sourceErrors,
         }),
@@ -166,20 +168,35 @@ export async function POST(req: Request) {
 
         send({ type: "phase", phase: "search" });
         send({ type: "log", line: "QUERYING FDA ENFORCEMENT DATABASE…" });
+        send({ type: "log", line: "QUERYING FDA RECALL ANNOUNCEMENTS…" });
         send({ type: "log", line: "QUERYING USDA/FSIS RECALL FILE…" });
 
         const sourceErrors: string[] = [];
-        const [fdaResult, fsisResult] = await Promise.allSettled([
+        const [fdaResult, fdaPressResult, fsisResult] = await Promise.allSettled([
           searchFda(subject),
+          searchFdaPress(subject),
           searchFsis(subject, fsisFeed),
         ]);
         const fda = fdaResult.status === "fulfilled" ? fdaResult.value : [];
+        const fdaPress = fdaPressResult.status === "fulfilled" ? fdaPressResult.value : [];
         const fsis = fsisResult.status === "fulfilled" ? fsisResult.value : [];
         if (fdaResult.status === "rejected") {
           sourceErrors.push("FDA enforcement database was unreachable.");
           send({ type: "log", line: `FDA DATABASE: NO RESPONSE — ${reasonOf(fdaResult)}` });
         } else {
           send({ type: "log", line: `FDA DATABASE: ${fda.length} CANDIDATE RECORD(S).` });
+        }
+        if (fdaPressResult.status === "rejected") {
+          sourceErrors.push("FDA recall announcements feed was unreachable.");
+          send({
+            type: "log",
+            line: `FDA ANNOUNCEMENTS: NO RESPONSE — ${reasonOf(fdaPressResult)}`,
+          });
+        } else {
+          send({
+            type: "log",
+            line: `FDA ANNOUNCEMENTS: ${fdaPress.length} CANDIDATE RECORD(S).`,
+          });
         }
         if (fsisResult.status === "rejected") {
           sourceErrors.push("USDA FSIS recall feed was unreachable.");
@@ -191,7 +208,7 @@ export async function POST(req: Request) {
         send({ type: "phase", phase: "adjudicate" });
         send({ type: "log", line: "ADJUDICATING FINDINGS…" });
 
-        const verdict = await adjudicate(subject, fda, fsis, sourceErrors);
+        const verdict = await adjudicate(subject, fda, fdaPress, fsis, sourceErrors);
         send({ type: "log", line: "DETERMINATION REACHED." });
         send({ type: "verdict", verdict });
       } catch (err) {

@@ -90,6 +90,20 @@ export interface FdaRecord {
   code_info: string;
 }
 
+/**
+ * A recall announcement from the FDA press-release feed. These appear the day
+ * a recall is announced, weeks before the enforcement database picks it up.
+ */
+export interface FdaPressRecord {
+  posted_date: string;
+  brand: string;
+  company: string;
+  product_description: string;
+  reason: string;
+  product_type: string;
+  url: string;
+}
+
 export interface FsisRecord {
   title: string;
   establishment: string;
