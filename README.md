@@ -12,8 +12,8 @@ verdict.
 
 1. The browser downscales your photo and sends it to `POST /api/investigate`.
 2. The route streams the investigation as Server-Sent Events:
-   - **Identify** — Claude Opus 5 (`claude-opus-5`, with a server-side
-     fallback to Opus 4.8) reads the label and returns structured data:
+   - **Identify** — Claude Sonnet 5.5 (`claude-sonnet-5-5`, with the
+     default server-side refusal fallback) reads the label and returns structured data:
      brand, product, category, search terms.
    - **Search** — the server queries the
      [openFDA food enforcement API](https://open.fda.gov/apis/food/enforcement/)
