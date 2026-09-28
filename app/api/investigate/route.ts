@@ -14,7 +14,7 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const MODEL = "claude-opus-5";
+const MODEL = "claude-sonnet-5-5";
 const client = new Anthropic();
 
 const ALLOWED_MEDIA = new Set([
@@ -26,7 +26,7 @@ const ALLOWED_MEDIA = new Set([
 type MediaType = "image/jpeg" | "image/png" | "image/webp" | "image/gif";
 
 /**
- * One structured call: Opus 5 with server-side refusal fallback to Opus 4.8.
+ * One structured call: Sonnet 5.5 with default server-side refusal fallback.
  * The response text is validated against the given Zod schema.
  */
 async function callClaude<S extends z.ZodTypeAny>(
@@ -37,8 +37,8 @@ async function callClaude<S extends z.ZodTypeAny>(
   const response = await client.beta.messages.create({
     model: MODEL,
     max_tokens: 16000,
-    betas: ["server-side-fallback-2026-06-01"],
-    fallbacks: [{ model: "claude-opus-4-8" }],
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
     system,
     output_config: { format: zodOutputFormat(schema) },
     messages: [{ role: "user", content }],
